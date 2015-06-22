@@ -10,6 +10,7 @@ import eu.stratosphere.peel.core.beans.experiment.Experiment
 import eu.stratosphere.peel.core.util.shell
 import eu.stratosphere.peel.extensions.flink.beans.system.Flink
 import spray.json._
+import scala.sys.process.{Process, ProcessLogger}
 
 /** Flink Experiment class
   *
@@ -32,7 +33,7 @@ import spray.json._
  * @param name Name of the Experiment
  * @param config Config Object for the experiment
  */
-class FlinkExperiment(command: String,
+class FlinkExperimentKiller(command: String,
                       runner: Flink,
                       runs: Int,
                       inputs: Set[DataSet],
@@ -44,10 +45,10 @@ class FlinkExperiment(command: String,
 
   def this(runs: Int, runner: Flink, inputs: Set[DataSet], output: ExperimentOutput, command: String, name: String, config: Config) = this(command, runner, runs, inputs, Set(output), name, config)
 
-  override def run(id: Int, force: Boolean): Experiment.Run[Flink] = new FlinkExperiment.SingleJobRun(id, this, force)
+  override def run(id: Int, force: Boolean): Experiment.Run[Flink] = new FlinkExperimentKiller.SingleJobRun(id, this, force)
 }
 
-object FlinkExperiment {
+object FlinkExperimentKiller {
 
   case class State(name: String,
                    suiteName: String,
@@ -63,11 +64,14 @@ object FlinkExperiment {
   }
 
   /** A private inner class encapsulating the logic of single run. */
-  class SingleJobRun(val id: Int, val exp: FlinkExperiment, val force: Boolean) extends Experiment.SingleJobRun[Flink, State] {
+  class SingleJobRun(val id: Int, val exp: FlinkExperimentKiller, val force: Boolean) extends Experiment.SingleJobRun[Flink, State] {
 
-    import eu.stratosphere.peel.extensions.flink.beans.experiment.FlinkExperiment.StateProtocol._
+    import eu.stratosphere.peel.extensions.flink.beans.experiment.FlinkExperimentKiller.StateProtocol._
 
     val runnerLogPath = exp.config.getString("system.flink.path.log")
+    
+    val nodeToKill = exp.config.getString("system.flink.kill")
+    val nodeToKillLog = exp.config.getString("system.flink.killLog")
 
     override def isSuccessful = state.runExitCode.getOrElse(-1) == 0 //state.plnExitCode.getOrElse(-1) == 0 && state.runExitCode.getOrElse(-1) == 0
 
@@ -95,6 +99,14 @@ object FlinkExperiment {
       // try to get the experiment run plan
       val (plnExit, _) = Experiment.time(this !(s"info -e $command", s"$home/run.pln", s"$home/run.pln"))
       state.plnExitCode = Some(plnExit)
+      
+      logger.info(s"Killing Node $nodeToKill listening at $runnerLogPath/$nodeToKillLog")
+      val killerCommand = "ssh "+nodeToKill+"; sh -c 'tail -n +0 --pid=$$ -F "+s"$runnerLogPath/$nodeToKillLog"+" | { sed \"/starting iteration \\[7\\]/ q\" && kill $$ ;}'; kill $(ps aux | grep 'org.apache.flink.runtime.taskmanager.TaskManager ' -m1 | awk '{print $2}')"
+      logger.info(s"$killerCommand")
+      // run detached killer process
+      val killer = Process("/bin/bash", Seq("-c", killerCommand))
+      val killerP = killer.run
+      
       // try to execute the experiment run plan
       val (runExit, t) = Experiment.time(this !(s"run $command", s"$home/run.out", s"$home/run.err"))
       state.runTime = t

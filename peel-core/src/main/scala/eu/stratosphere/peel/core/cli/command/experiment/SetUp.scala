@@ -75,9 +75,9 @@ class SetUp extends Command {
           case _ => Unit
         }
 
-        logger.info("Setting up systems with SUITE or EXPERIMENT lifespan")
+        logger.info("Setting up systems with SUITE or EXPERIMENT or JOB lifespan")
         for (n <- graph.reverse.traverse(); if graph.descendants(exp).contains(n)) n match {
-          case s: System => if ((Lifespan.SUITE :: Lifespan.EXPERIMENT :: Nil contains s.lifespan) && !s.isUp) s.setUp()
+          case s: System => if ((Lifespan.SUITE :: Lifespan.EXPERIMENT :: Lifespan.JOB :: Nil contains s.lifespan) && !s.isUp) s.setUp()
           case _ => Unit
         }
 
@@ -87,9 +87,9 @@ class SetUp extends Command {
         case e: Throwable =>
           logger.error(s"Exception of type ${e.getClass.getCanonicalName} for experiment ${exp.name} in suite ${suite.name}: ${e.getMessage}")
 
-          logger.info("Tearing down runing systems with SUITE or EXPERIMENT lifespan")
+          logger.info("Tearing down runing systems with SUITE or EXPERIMENT or JOB lifespan")
           for (n <- graph.traverse(); if graph.descendants(exp).contains(n)) n match {
-            case s: System => if ((Lifespan.SUITE :: Lifespan.EXPERIMENT :: Nil contains s.lifespan) && s.isUp) s.tearDown()
+            case s: System => if ((Lifespan.SUITE :: Lifespan.EXPERIMENT :: Lifespan.EXPERIMENT :: Nil contains s.lifespan) && s.isUp) s.tearDown()
             case _ => Unit
           }
 

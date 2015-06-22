@@ -76,7 +76,7 @@ class TearDown extends Command {
 
       logger.info("Tearing down systems for experiment '%s'".format(exp.name))
       for (n <- graph.traverse(); if graph.descendants(exp).contains(n)) n match {
-        case s: System if Lifespan.SUITE :: Lifespan.EXPERIMENT :: Nil contains s.lifespan => s.tearDown()
+        case s: System if Lifespan.SUITE :: Lifespan.EXPERIMENT :: Lifespan.JOB  :: Nil contains s.lifespan => s.tearDown()
         case _ => Unit
       }
     }
